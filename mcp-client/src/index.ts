@@ -1,8 +1,10 @@
+import ollama from "ollama";
+
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-const client = new Client({
-  name: "my-first-mcp-client",
+const mcpClient = new Client({
+  name: "ollama-mcp-client",
   version: "1.0.0",
 });
 
@@ -11,45 +13,61 @@ const transport = new StdioClientTransport({
   args: ["tsx", "../mcp-server/src/index.ts"],
 });
 
-await client.connect(transport);
+await mcpClient.connect(transport);
 
 console.log("Connected to MCP server");
 
-const tools = await client.listTools();
+const mcpTools = await mcpClient.listTools();
+// console.log(mcpTools.tools);
 
-console.log("Available tools:");
-console.log(tools.tools);
+const ollamaTools = mcpTools.tools.map((tool) => ({
+  type: "function" as const,
+  function: {
+    name: tool.name,
+    description: tool.description ?? "",
+    parameters: tool.inputSchema,
+  },
+}));
 
-const args = {
-  a: Math.floor(Math.random() * 10),
-  b: Math.floor(Math.random() * 10),
-};
+const messages = [
+  {
+    role: "user",
+    content: "What is 25 + 17?",
+  },
+];
 
-console.log("Calling tool 'add' with arguments:");
-console.log(args);
-
-const addResult = await client.callTool({
-  name: "add",
-  arguments: args,
+const response = await ollama.chat({
+  model: "llama3.2:3b",
+  messages,
+  tools: ollamaTools,
 });
 
-const subtractResult = await client.callTool({
-  name: "subtract",
-  arguments: args,
-});
+console.log(response.message.tool_calls);
 
-const multiplyResult = await client.callTool({
-  name: "multiply",
-  arguments: args,
-});
+if (response.message.tool_calls) {
+  for (const toolCall of response.message.tool_calls) {
+    const toolName = toolCall.function.name;
+    const arguments_ = toolCall.function.arguments;
 
-const divideResult = await client.callTool({
-  name: "divide",
-  arguments: args,
-});
+    console.log("LLM requested:", toolName);
+    console.log("Arguments:", arguments_);
 
-console.log("Tool result:");
-console.log("Add result:", addResult);
-console.log("Subtract result:", subtractResult);
-console.log("Multiply result:", multiplyResult);
-console.log("Divide result:", divideResult);
+    const normalizedArguments = Object.fromEntries(
+      Object.entries(arguments_).map(([key, value]) => [
+        key,
+        typeof value === "string" &&
+        value.trim() !== "" &&
+        !Number.isNaN(Number(value))
+          ? Number(value)
+          : value,
+      ]),
+    );
+
+    const result = await mcpClient.callTool({
+      name: toolName,
+      arguments: normalizedArguments,
+    });
+
+    console.log("MCP result:", result);
+  }
+}
