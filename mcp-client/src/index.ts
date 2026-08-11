@@ -2,6 +2,7 @@ import ollama from "ollama";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import readline from "node:readline/promises";
 
 const mcpClient = new Client({
   name: "ollama-mcp-client",
@@ -20,6 +21,12 @@ console.log("Connected to MCP server");
 const mcpTools = await mcpClient.listTools();
 // console.log(mcpTools.tools);
 
+console.log("\nAvailable MCP tools:");
+
+for (const tool of mcpTools.tools) {
+  console.log(`- ${tool.name}: ${tool.description}`);
+}
+
 const ollamaTools = mcpTools.tools.map((tool) => ({
   type: "function" as const,
   function: {
@@ -32,7 +39,7 @@ const ollamaTools = mcpTools.tools.map((tool) => ({
 const messages = [
   {
     role: "user",
-    content: "What is 25 + 17?",
+    content: "What is 23 removed from 49 and 31 multiplies by 2?",
   },
 ];
 
